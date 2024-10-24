@@ -1,0 +1,14 @@
+2024-10-24 18:00:57,790 - SERVER - INFO - Waiting for requests...
+2024-10-24 18:01:13,302 - SERVER - INFO - Starting GBN protocol test
+2024-10-24 18:01:13,303 - SERVER - INFO - Sending packet with Seq Num: 0
+2024-10-24 18:01:13,303 - SERVER - INFO - Sending packet with Seq Num: 1
+2024-10-24 18:01:13,304 - SERVER - INFO - Sending packet with Seq Num: 2
+2024-10-24 18:01:13,304 - SERVER - INFO - Sending packet with Seq Num: 3
+2024-10-24 18:01:13,304 - SERVER - INFO - Received ACK for Seq Num: 1
+2024-10-24 18:01:13,305 - SERVER - INFO - Sending packet with Seq Num: 4
+2024-10-24 18:01:13,305 - SERVER - INFO - Sending packet with Seq Num: 5
+2024-10-24 18:01:13,305 - SERVER - INFO - Received ACK for Seq Num: 2
+2024-10-24 18:01:13,305 - SERVER - INFO - Sending packet with Seq Num: 6
+2024-10-24 18:01:13,305 - SERVER - INFO - Received ACK for Seq Num: 3
+2024-10-24 18:01:13,306 - SERVER - INFO - Sending packet with Seq Num: 7
+2024-10-24 18:01:15,319 - SERVER - INFO - Timeout! Resending packets from Seq Num: 4
