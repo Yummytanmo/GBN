@@ -54,9 +54,11 @@ class GBNClient:
 
             # Send ACK
             ack_packet = bytearray()
-            ack_packet.append(seq_num)  # ACK the received sequence number
+
+            ack_packet.append(expected_seq_num - 1 if expected_seq_num > 0 else 0xFF)  # ACK the received sequence number
+            
             ack_packet.append(0x00)  # EOF
-            client_logger.info(f"Sending ACK for Seq Num: {seq_num}")
+            client_logger.info(f"Sending ACK for Seq Num: {expected_seq_num - 1}")
             self.sock.sendto(ack_packet, server)
 
     def send_command(self, command):
@@ -91,9 +93,11 @@ class GBNClient:
                 self.packet_loss = packet_loss
                 self.ack_loss = ack_loss
                 client_logger.info(f"Starting GBN test with packet loss: {packet_loss}, ACK loss: {ack_loss}")
-                self.send_command(command)
+                self.send_command("-testgbn")
             else:
                 self.send_command(command)
+            
+            self.response = ""
 
 
 if __name__ == '__main__':

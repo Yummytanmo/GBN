@@ -14,7 +14,7 @@ handler.setFormatter(formatter)
 server_logger.addHandler(handler)
 
 class GBNServer:
-    def __init__(self, host='localhost', port=12345, window_size=4, timeout=2):
+    def __init__(self, host='localhost', port=12345, window_size=10, timeout=2):
         self.server_address = (host, port)
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.bind(self.server_address)
@@ -72,24 +72,27 @@ class GBNServer:
             server_logger.info(f"Timeout! Resending packets from Seq Num: {self.base}")
             self.timer = None  # Reset the timer
             self.next_seq_num = self.base  # Retransmit from base
-            self.handle_gbn(client_address)
+            self.acknowledged.set()
 
     def receive_ack(self):
         """Receive ACK from client."""
         while True:
             ack_packet, client_address = self.sock.recvfrom(1024)
             ack_num = ack_packet[0]  # First byte is the ACK number
+            if ack_num == 0xFF:  # Special FIN packet received
+                server_logger.info(f"Received ACK for Seq Num: {-1}")
+                continue
             server_logger.info(f"Received ACK for Seq Num: {ack_num}")
 
             with self.lock:
                 if self.base <= ack_num < self.base + self.window_size:
                     self.base = ack_num + 1  # Slide the window
 
-                    # Stop the timer if all packets are acknowledged
-                    if self.base == self.next_seq_num:
-                        if self.timer:
-                            self.timer.cancel()
-                            self.timer = None
+                    # # Stop the timer if all packets are acknowledged
+                    # if self.base == self.next_seq_num:
+                    if self.timer:
+                        self.timer.cancel()
+                        self.timer = None
                     self.acknowledged.set()
 
             if self.base == len(self.data_buffer):  # All packets sent and acknowledged
@@ -130,6 +133,10 @@ class GBNServer:
             except KeyboardInterrupt:
                 server_logger.info("Server is shutting down.")
                 break
+
+            self.base = 0  # Base of the window
+            self.next_seq_num = 0  # Next sequence number to be sent
+            self.data_buffer = []  # Buffer for storing data to be sent
 
         # Close the socket
         self.sock.close()
