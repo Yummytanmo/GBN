@@ -44,13 +44,95 @@ def get_filename(data):
     filename = f"received_file_{current_time}{extension}"
     return filename
 class GBNClient:
-    def __init__(self, server_host='localhost', server_port=12345, packet_loss=0.2, ack_loss=0.2):
+    def __init__(self, server_host='localhost', server_port=12345, window_size=10, timeout=2, packet_loss=0.2, ack_loss=0.2):
         self.server_address = (server_host, server_port)
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.sock.settimeout(10.0)
+        self.sock.settimeout(6.0)
+        self.window_size = window_size  # Sliding window size
+        self.timeout = timeout  # Timeout for retransmission
+        self.base = 0  # Base of the window
+        self.next_seq_num = 0  # Next sequence number to be sent
+        self.data_buffer = []  # Buffer for storing data to be sent
+        self.lock = threading.Lock()  # Lock for thread safety
+        self.timer = None
+        self.acknowledged = threading.Event()  # Event to signal acknowledgement received
         self.packet_loss = packet_loss  # Loss rate for data packets
         self.ack_loss = ack_loss  # Loss rate for ACKs
         self.response = []
+
+    def send_packet(self, seq_num, data, client_address):
+        """Construct and send a data packet."""
+        packet = bytearray()
+        packet.append(seq_num)  # 1 byte for sequence number
+        packet.extend(data)  # Append the actual data
+        packet.append(0x00)  # EOF indicator (end of frame)
+        client_logger.info(f"Sending packet with Seq Num: {seq_num}")
+        self.sock.sendto(packet, client_address)
+
+    def handle_gbn(self, client_address):
+        """Main GBN protocol handler to send data."""
+        while self.base < len(self.data_buffer):
+            with self.lock:
+                # Send all the packets in the window
+                while self.next_seq_num < self.base + self.window_size and self.next_seq_num < len(self.data_buffer):
+                    self.send_packet(self.next_seq_num, self.data_buffer[self.next_seq_num], client_address)
+                    self.next_seq_num += 1
+
+                # Start timer if it's not running
+                if not self.timer:
+                    self.timer = threading.Timer(self.timeout, self.timeout_handler, [client_address])
+                    self.timer.start()
+
+            # Wait for ACKs
+            self.acknowledged.wait()
+
+            # Handle ACK and slide window if received
+            self.acknowledged.clear()
+
+    def timeout_handler(self, client_address):
+        """Handle packet retransmission on timeout."""
+        with self.lock:
+            client_logger.info(f"Timeout! Resending packets from Seq Num: {self.base}")
+            self.timer = None  # Reset the timer
+            self.next_seq_num = self.base  # Retransmit from base
+            self.acknowledged.set()
+
+    def receive_ack(self):
+        """Receive ACK from client."""
+        while True:
+            ack_packet, client_address = self.sock.recvfrom(2048)
+            ack_num = ack_packet[0]  # First byte is the ACK number
+            if ack_num == 0xFF:  # Special FIN packet received
+                client_logger.info(f"Received ACK for Seq Num: {-1}")
+                continue
+            client_logger.info(f"Received ACK for Seq Num: {ack_num}")
+
+            with self.lock:
+                if self.base <= ack_num < self.base + self.window_size:
+                    self.base = ack_num + 1  # Slide the window
+
+                    # # Stop the timer if all packets are acknowledged
+                    # if self.base == self.next_seq_num:
+                    if self.timer:
+                        self.timer.cancel()
+                        self.timer = None
+                    self.acknowledged.set()
+
+            if self.base == len(self.data_buffer):  # All packets sent and acknowledged
+                break
+    
+    def get_data(self, file_path):
+        with open(file_path, 'rb') as file:
+            file_data = file.read()
+        # 分片，最大数据部分为1024字节
+        packets = []
+        seq_number = 0
+        for i in range(0, len(file_data), 1024):
+            data_chunk = file_data[i:i + 1024]
+            packet = data_chunk
+            packets.append(packet)
+            seq_number = (seq_number + 1) % 256  # Seq最大值255，循环
+        return packets
 
     def receive_gbn(self):
         """Receive data using Go-Back-N protocol, simulate packet and ACK loss."""
@@ -106,6 +188,27 @@ class GBNClient:
             output_file = "./data/client/" + file_name
             with open(output_file, 'wb') as file:
                 file.write(received_data)
+        elif command.startswith("-send"):
+            self.sock.settimeout(None)
+            parts = command.split()
+            filename = parts[1] if len(parts) > 1 else "test_figure.png"
+            client_logger.info("Start sending message")
+            client_logger.info(f"Send {filename}")
+            # Simulate some data to send
+            self.data_buffer = self.get_data("./data/client/" + filename)
+            # Start a thread to handle sending data via GBN
+            send_thread = threading.Thread(target=self.handle_gbn, args=(self.server_address,))
+            send_thread.start()
+
+            # Start a thread to receive ACKs
+            ack_thread = threading.Thread(target=self.receive_ack)
+            ack_thread.start()
+
+            send_thread.join()
+            ack_thread.join()
+            client_logger.info("Transmission complete")
+            self.sock.setblocking(False)
+            self.sock.settimeout(6.0)
         else:
             # For other commands, simply receive and client_logger.info the response
             response, _ = self.sock.recvfrom(1024)
@@ -130,8 +233,6 @@ class GBNClient:
                 self.ack_loss = ack_loss
                 client_logger.info(f"Starting GBN test with packet loss: {packet_loss}, ACK loss: {ack_loss}")
                 self.send_command("-testgbn " + filename)
-            # elif command.startswith("-send"):
-
             else:
                 self.send_command(command)
             
