@@ -3,6 +3,7 @@ import random
 import threading
 import logging
 from datetime import datetime
+from time import sleep
 import magic
 
 # Set up client logger
@@ -185,13 +186,13 @@ class GBNClient:
             received_data = b''.join(i for i in self.response)
             file_name = get_filename(received_data)
             client_logger.info(f"Response from server: {file_name}")
-            output_file = "./data/client/" + file_name
+            output_file = "./data/client/receive/" + file_name
             with open(output_file, 'wb') as file:
                 file.write(received_data)
         elif command.startswith("-send"):
             self.sock.settimeout(None)
             parts = command.split()
-            filename = parts[1] if len(parts) > 1 else "test_figure.png"
+            filename = parts[1] if len(parts) > 1 else "test_txt.txt"
             client_logger.info("Start sending message")
             client_logger.info(f"Send {filename}")
             # Simulate some data to send
@@ -206,6 +207,7 @@ class GBNClient:
 
             send_thread.join()
             ack_thread.join()
+            sleep(7)
             client_logger.info("Transmission complete")
             self.sock.setblocking(False)
             self.sock.settimeout(6.0)
@@ -238,6 +240,9 @@ class GBNClient:
             
             self.response = []
 
+class StopAndWaitClient(GBNClient):
+    def __init__(self, server_host='localhost', server_port=12345, timeout=2, packet_loss=0.2, ack_loss=0.2):
+        super().__init__(server_host, server_port, 1, timeout, packet_loss, ack_loss)
 
 if __name__ == '__main__':
     client = GBNClient()

@@ -4,7 +4,6 @@ import socket
 import threading
 import logging
 import time
-
 import magic
 
 # Set up server logger
@@ -177,7 +176,6 @@ class GBNServer:
             server_logger.info(f"Sending ACK for Seq Num: {expected_seq_num - 1}")
             self.sock.sendto(ack_packet, server)
 
-
     def start(self):
         server_logger.info("Waiting for requests...")
         while True:
@@ -189,7 +187,7 @@ class GBNServer:
                     server_logger.info("Starting protocol test")
                     parts = message.split()
                     # server_logger.info(f"Parts: {parts}")
-                    filename = parts[1] if len(parts) > 1 else "test_figure.png"
+                    filename = parts[1] if len(parts) > 1 else "test_txt.txt"
                     server_logger.info(f"Send {filename}")
                     # Simulate some data to send
                     self.data_buffer = self.get_data("./data/server/" + filename)
@@ -212,7 +210,7 @@ class GBNServer:
                     received_data = b''.join(i for i in self.response)
                     file_name = get_filename(received_data)
                     server_logger.info(f"Response from server: {file_name}")
-                    output_file = "./data/server/" + file_name
+                    output_file = "./data/server/receive/" + file_name
                     with open(output_file, 'wb') as file:
                         file.write(received_data)
                     self.sock.settimeout(None)
@@ -238,6 +236,9 @@ class GBNServer:
         # Close the socket
         self.sock.close()
 
+class StopAndWaitServer(GBNServer):
+    def __init__(self, host='localhost', port=12345, timeout=2, packet_loss=0.2, ack_loss=0.2):
+        super().__init__(host, port, 1, timeout, packet_loss, ack_loss)
 
 if __name__ == '__main__':
     server = GBNServer()
