@@ -63,8 +63,7 @@ class GBNServer:
 
             # Handle ACK and slide window if received
             self.acknowledged.clear()
-        
-        self.send_fin(client_address)
+
 
     def timeout_handler(self, client_address):
         """Handle packet retransmission on timeout."""
@@ -77,7 +76,7 @@ class GBNServer:
     def receive_ack(self):
         """Receive ACK from client."""
         while True:
-            ack_packet, client_address = self.sock.recvfrom(1024)
+            ack_packet, client_address = self.sock.recvfrom(2048)
             ack_num = ack_packet[0]  # First byte is the ACK number
             if ack_num == 0xFF:  # Special FIN packet received
                 server_logger.info(f"Received ACK for Seq Num: {-1}")
@@ -97,6 +96,20 @@ class GBNServer:
 
             if self.base == len(self.data_buffer):  # All packets sent and acknowledged
                 break
+    
+    def get_data(self, file_path):
+        with open(file_path, 'rb') as file:
+            file_data = file.read()
+        # 分片，最大数据部分为1024字节
+        packets = []
+        seq_number = 0
+        for i in range(0, len(file_data), 1024):
+            data_chunk = file_data[i:i + 1024]
+            packet = data_chunk
+            packets.append(packet)
+            seq_number = (seq_number + 1) % 256  # Seq最大值255，循环
+        return packets
+
 
     def start(self):
         server_logger.info("Waiting for requests...")
@@ -105,11 +118,14 @@ class GBNServer:
                 data, client_address = self.sock.recvfrom(1024)
                 message = data.decode()
 
-                if message == "-testgbn":
+                if message.startswith("-testgbn"):
                     server_logger.info("Starting GBN protocol test")
+                    parts = message.split()
+                    # server_logger.info(f"Parts: {parts}")
+                    filename = parts[1] if len(parts) > 1 else "test_figure.png"
+                    server_logger.info(f"Send {filename}")
                     # Simulate some data to send
-                    self.data_buffer = [f"Data packet {i}".encode() for i in range(10)]
-                    
+                    self.data_buffer = self.get_data("./data/server/" + filename)
                     # Start a thread to handle sending data via GBN
                     send_thread = threading.Thread(target=self.handle_gbn, args=(client_address,))
                     send_thread.start()
@@ -122,9 +138,11 @@ class GBNServer:
                     ack_thread.join()
                     server_logger.info("GBN transmission complete")
                 elif message == "-time":
-                    server_logger.info(f"Server time: {socket.gethostbyname(socket.gethostname())}")
-                    self.sock.sendto(time.ctime().encode(), client_address)
+                    server_time = time.ctime().encode()
+                    server_logger.info(f"Server time: {server_time.decode()}")
+                    self.sock.sendto(server_time, client_address)
                 elif message == "-quit":
+                    server_logger.info("Good bye!")
                     self.sock.sendto("Good bye!".encode(), client_address)
                     break
                 else:
