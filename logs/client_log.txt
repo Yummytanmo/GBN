@@ -1,4 +1,0 @@
-Traceback (most recent call last):
-  File "E:\School\Grade3\ComputerNetwork\Lab2\client.py", line 27, in <module>
-    data, addr = client_socket.recvfrom(1024)
-OSError: [WinError 10040] 一个在数据报套接字上发送的消息大于内部消息缓冲区或其他一些网络限制，或该用户用于接收数据报的缓冲区比数据报小。
